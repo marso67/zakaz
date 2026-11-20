@@ -2,260 +2,211 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Буклет-навигатор</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админка буклета</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #1a1a1a; color: #fff; margin: 0; padding: 20px; }
+  .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; justify-content: center; align-items: center; padding: 20px; }
+  .modal-content { background: #2a2a2a; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; }
+  textarea { width: 100%; height: 200px; background: #111; color: #0f0; border: 1px solid #444; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; margin: 12px 0; }
+  .btn { padding: 12px 24px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 16px; }
+  .btn-primary { background: #4caf50; color: #fff; width: 100%; }
+  .btn-add { position: fixed; top: 20px; right: 20px; background: #ffd700; color: #000; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
   
-  body {
-    font-family: system-ui, sans-serif;
-    background: #1a1a1a;
-    height: 100vh;
-    overflow: hidden;
-    touch-action: none; /* отключаем системные жесты */
-  }
-
-  #viewer {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    cursor: grab;
-  }
-  #viewer.dragging { cursor: grabbing; }
-
-  #booklet {
-    position: absolute;
-    top: 0; left: 0;
-    transform-origin: 0 0;
-    will-change: transform;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-
-  /* Панель управления */
-  .controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-areas:
-      ". up ."
-      "left . right"
-      ". down .";
-    gap: 8px;
-    z-index: 10;
-  }
-
-  .ctrl-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,0.9);
-    font-size: 22px;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-  }
-  .ctrl-btn:active { transform: scale(0.9); background: #fff; }
-  .ctrl-btn[data-dir="up"]    { grid-area: up; }
-  .ctrl-btn[data-dir="left"]  { grid-area: left; }
-  .ctrl-btn[data-dir="right"] { grid-area: right; }
-  .ctrl-btn[data-dir="down"]  { grid-area: down; }
-
-  /* Зум */
-  .zoom-controls {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 10;
-  }
-
-  /* Индикатор масштаба */
-  .zoom-info {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    background: rgba(0,0,0,0.6);
-    color: #fff;
-    padding: 8px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    z-index: 10;
-  }
-
-  @media (max-width: 600px) {
-    .ctrl-btn { width: 52px; height: 52px; font-size: 20px; }
-    .controls { bottom: 16px; }
-  }
+  #admin-viewer { position: relative; width: 100%; max-width: 1200px; margin: 60px auto 0; border: 2px solid #444; overflow: hidden; cursor: crosshair; }
+  #admin-viewer.drawing { cursor: crosshair; }
+  #booklet { display: block; max-width: 100%; user-select: none; }
+  
+  .selection-box { position: absolute; border: 2px dashed #ffd700; background: rgba(255, 215, 0, 0.2); pointer-events: none; }
+  
+  .form-modal { display: none; }
+  .form-modal.active { display: flex; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 14px; }
+  .form-group input, .form-group textarea { width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; }
 </style>
 </head>
 <body>
 
-<div id="viewer">
-  <!-- Замените src на ваш скан буклета -->
-  <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
+<!-- Модалка ввода кода -->
+<div id="paste-modal" class="modal">
+  <div class="modal-content">
+    <h2>📋 Загрузка актуального кода</h2>
+    <p style="color:#aaa; font-size:14px; margin-top:8px;">Откройте ваш <b>index.html</b>, скопируйте весь код и вставьте его сюда. Это нужно, чтобы сохранить уже добавленные товары.</p>
+    <textarea id="code-input" placeholder="<html>..."></textarea>
+    <button class="btn btn-primary" onclick="loadCode()">Загрузить и начать</button>
+  </div>
 </div>
 
-<div class="zoom-info" id="zoomInfo">100%</div>
-
-<div class="zoom-controls">
-  <button class="ctrl-btn" id="zoomIn">+</button>
-  <button class="ctrl-btn" id="zoomOut">−</button>
-  <button class="ctrl-btn" id="reset">⟲</button>
+<!-- Модалка формы товара -->
+<div id="form-modal" class="modal form-modal">
+  <div class="modal-content">
+    <h2>📦 Новый товар</h2>
+    <div class="form-group">
+      <label>Имя файла фото (из папки tovar/)</label>
+      <input type="text" id="f-image" placeholder="001.jpg">
+    </div>
+    <div class="form-group">
+      <label>Название товара</label>
+      <input type="text" id="f-title" placeholder="Например: Услуга 'Под ключ'">
+    </div>
+    <div class="form-group">
+      <label>Описание товара</label>
+      <textarea id="f-desc" rows="3" placeholder="Краткое описание..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Цена</label>
+      <input type="text" id="f-price" placeholder="5000">
+    </div>
+    <div class="form-group">
+      <label>Ваш номер телефона (для отображения)</label>
+      <input type="text" id="f-phone" placeholder="+7 (999) 123-45-67">
+    </div>
+    <button class="btn btn-primary" onclick="saveProduct()">💾 Сохранить и сгенерировать код</button>
+    <button class="btn" style="background:#444; color:#fff; width:100%; margin-top:10px;" onclick="cancelForm()">Отмена</button>
+  </div>
 </div>
 
-<div class="controls">
-  <button class="ctrl-btn" data-dir="up">↑</button>
-  <button class="ctrl-btn" data-dir="left">←</button>
-  <button class="ctrl-btn" data-dir="right">→</button>
-  <button class="ctrl-btn" data-dir="down">↓</button>
+<button id="add-btn" class="btn btn-add" style="display:none;" onclick="enableDrawing()">➕ Добавить область</button>
+
+<div id="admin-viewer" style="display:none;">
+  <img id="booklet" src="../booklet.jpg" alt="Буклет">
+  <div id="selection" class="selection-box" style="display:none;"></div>
 </div>
 
 <script>
-const viewer   = document.getElementById('viewer');
-const img      = document.getElementById('booklet');
-const zoomInfo = document.getElementById('zoomInfo');
+let baseHtml = '';
+let hotspots = [];
+let isDrawing = false;
+let startX, startY;
+let currentRect = {};
 
-let scale = 1;
-let posX = 0, posY = 0;
-const STEP = 80;       // шаг стрелок в пикселях
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 4;
-
-function updateTransform() {
-  img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-  zoomInfo.textContent = Math.round(scale * 100) + '%';
-}
-
-// Центрируем при загрузке
-img.onload = () => {
-  posX = (viewer.clientWidth  - img.naturalWidth  * scale) / 2;
-  posY = (viewer.clientHeight - img.naturalHeight * scale) / 2;
-  updateTransform();
-};
-
-// --- Кнопки-стрелки ---
-document.querySelectorAll('.ctrl-btn[data-dir]').forEach(btn => {
-  const move = () => {
-    const dir = btn.dataset.dir;
-    if (dir === 'up')    posY += STEP;
-    if (dir === 'down')  posY -= STEP;
-    if (dir === 'left')  posX += STEP;
-    if (dir === 'right') posX -= STEP;
-    updateTransform();
-  };
-  btn.addEventListener('click', move);
-});
-
-// --- Клавиатура ---
-document.addEventListener('keydown', e => {
-  const map = {
-    ArrowUp:    [0,  STEP],
-    ArrowDown:  [0, -STEP],
-    ArrowLeft:  [ STEP, 0],
-    ArrowRight: [-STEP, 0],
-  };
-  if (map[e.key]) {
-    e.preventDefault();
-    posX += map[e.key][0];
-    posY += map[e.key][1];
-    updateTransform();
+function loadCode() {
+  const code = document.getElementById('code-input').value.trim();
+  if (!code.includes('hotspots-data')) {
+    alert('Ошибка: Вставленный код не содержит блока hotspots-data. Убедитесь, что вы копируете актуальный index.html');
+    return;
   }
-});
-
-// --- Зум ---
-function zoom(delta, cx, cy) {
-  const oldScale = scale;
-  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta));
-  // зум к точке (cx, cy)
-  const k = scale / oldScale;
-  posX = cx - (cx - posX) * k;
-  posY = cy - (cy - posY) * k;
-  updateTransform();
+  baseHtml = code;
+  
+  // Парсим данные
+  const match = code.match(/<script id="hotspots-data" type="application\/json">(.*?)<\/script>/s);
+  if (match) {
+    try { hotspots = JSON.parse(match[1]); } catch(e) { hotspots = []; }
+  }
+  
+  document.getElementById('paste-modal').style.display = 'none';
+  document.getElementById('admin-viewer').style.display = 'block';
+  document.getElementById('add-btn').style.display = 'block';
 }
 
-document.getElementById('zoomIn').onclick  = () => zoom(0.2, viewer.clientWidth/2,  viewer.clientHeight/2);
-document.getElementById('zoomOut').onclick = () => zoom(-0.2, viewer.clientWidth/2, viewer.clientHeight/2);
-document.getElementById('reset').onclick   = () => {
-  scale = 1;
-  posX = (viewer.clientWidth  - img.naturalWidth)  / 2;
-  posY = (viewer.clientHeight - img.naturalHeight) / 2;
-  updateTransform();
-};
+function enableDrawing() {
+  isDrawing = true;
+  document.getElementById('admin-viewer').classList.add('drawing');
+}
 
-// Колесо мыши
-viewer.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = viewer.getBoundingClientRect();
-  zoom(e.deltaY < 0 ? 0.15 : -0.15, e.clientX - rect.left, e.clientY - rect.top);
-}, { passive: false });
+const viewer = document.getElementById('admin-viewer');
+const selBox = document.getElementById('selection');
 
-// --- Drag мышью ---
-let isDragging = false, startX, startY;
 viewer.addEventListener('mousedown', e => {
-  isDragging = true;
-  viewer.classList.add('dragging');
-  startX = e.clientX - posX;
-  startY = e.clientY - posY;
-});
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  posX = e.clientX - startX;
-  posY = e.clientY - startY;
-  updateTransform();
-});
-window.addEventListener('mouseup', () => {
-  isDragging = false;
-  viewer.classList.remove('dragging');
+  if (!isDrawing) return;
+  const rect = viewer.getBoundingClientRect();
+  startX = e.clientX - rect.left;
+  startY = e.clientY - rect.top;
+  selBox.style.left = startX + 'px';
+  selBox.style.top = startY + 'px';
+  selBox.style.width = '0px';
+  selBox.style.height = '0px';
+  selBox.style.display = 'block';
 });
 
-// --- Touch: перетаскивание + pinch-to-zoom ---
-let touches = [], lastDist = 0, lastMid = null;
+viewer.addEventListener('mousemove', e => {
+  if (!isDrawing || selBox.style.display === 'none') return;
+  const rect = viewer.getBoundingClientRect();
+  const currentX = e.clientX - rect.left;
+  const currentY = e.clientY - rect.top;
+  
+  const width = Math.abs(currentX - startX);
+  const height = Math.abs(currentY - startY);
+  const left = Math.min(currentX, startX);
+  const top = Math.min(currentY, startY);
+  
+  selBox.style.left = left + 'px';
+  selBox.style.top = top + 'px';
+  selBox.style.width = width + 'px';
+  selBox.style.height = height + 'px';
+});
 
-viewer.addEventListener('touchstart', e => {
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    startX = touches[0].clientX - posX;
-    startY = touches[0].clientY - posY;
-  } else if (touches.length === 2) {
-    lastDist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    lastMid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
+viewer.addEventListener('mouseup', e => {
+  if (!isDrawing) return;
+  isDrawing = false;
+  document.getElementById('admin-viewer').classList.remove('drawing');
+  
+  const rect = viewer.getBoundingClientRect();
+  const imgW = rect.width;
+  const imgH = rect.height;
+  
+  // Вычисляем проценты для адаптивности
+  const finalLeft = parseFloat(selBox.style.left);
+  const finalTop = parseFloat(selBox.style.top);
+  const finalW = parseFloat(selBox.style.width);
+  const finalH = parseFloat(selBox.style.height);
+  
+  if (finalW < 20 || finalH < 20) { // Слишком маленькая область, отмена
+    selBox.style.display = 'none';
+    return;
   }
-}, { passive: false });
+  
+  currentRect = {
+    x: (finalLeft / imgW * 100).toFixed(2),
+    y: (finalTop / imgH * 100).toFixed(2),
+    w: (finalW / imgW * 100).toFixed(2),
+    h: (finalH / imgH * 100).toFixed(2)
+  };
+  
+  selBox.style.display = 'none';
+  document.getElementById('form-modal').classList.add('active');
+});
 
-viewer.addEventListener('touchmove', e => {
-  e.preventDefault();
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    posX = touches[0].clientX - startX;
-    posY = touches[0].clientY - startY;
-    updateTransform();
-  } else if (touches.length === 2) {
-    const dist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    const mid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-    zoom((dist - lastDist) * 0.005, mid.x, mid.y);
-    lastDist = dist;
-    lastMid = mid;
+function cancelForm() {
+  document.getElementById('form-modal').classList.remove('active');
+}
+
+function saveProduct() {
+  const newProduct = {
+    id: Date.now(),
+    x: currentRect.x, y: currentRect.y, w: currentRect.w, h: currentRect.h,
+    image: document.getElementById('f-image').value.trim(),
+    title: document.getElementById('f-title').value.trim(),
+    description: document.getElementById('f-desc').value.trim(),
+    price: document.getElementById('f-price').value.trim(),
+    phone: document.getElementById('f-phone').value.trim()
+  };
+  
+  if (!newProduct.title || !newProduct.image) {
+    alert('Заполните хотя бы название и имя файла фото!');
+    return;
   }
-}, { passive: false });
+  
+  hotspots.push(newProduct);
+  
+  // Генерируем новый HTML
+  const jsonStr = JSON.stringify(hotspots, null, 2);
+  const newHtml = baseHtml.replace(
+    /(<script id="hotspots-data" type="application\/json">)([\s\S]*?)(<\/script>)/,
+    `$1\n${jsonStr}\n$3`
+  );
+  
+  // Копируем в буфер
+  navigator.clipboard.writeText(newHtml).then(() => {
+    alert('✅ НОВЫЙ КОД САЙТА СКОПИРОВАН В БУФЕР ОБМЕНА!\n\nТеперь:\n1. Откройте ваш index.html на компьютере.\n2. Полностью замените его содержимое (Ctrl+A -> Ctrl+V).\n3. Закоммитьте изменения в GitHub.');
+    document.getElementById('form-modal').classList.remove('active');
+    // Очищаем поля
+    ['f-image','f-title','f-desc','f-price','f-phone'].forEach(id => document.getElementById(id).value = '');
+  }).catch(err => {
+    alert('Ошибка копирования. Разрешите доступ к буферу обмена.');
+  });
+}
 </script>
 </body>
 </html>
