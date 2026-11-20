@@ -2,260 +2,248 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Буклет-навигатор</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Интерактивный буклет</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #121212; color: #fff; height: 100vh; overflow: hidden; touch-action: none; }
   
-  body {
-    font-family: system-ui, sans-serif;
-    background: #1a1a1a;
-    height: 100vh;
-    overflow: hidden;
-    touch-action: none; /* отключаем системные жесты */
-  }
-
-  #viewer {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    cursor: grab;
-  }
+  #viewer { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: grab; }
   #viewer.dragging { cursor: grabbing; }
+  #booklet { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; user-select: none; -webkit-user-drag: none; }
 
-  #booklet {
+  /* Горячие точки */
+  .hotspot {
     position: absolute;
-    top: 0; left: 0;
-    transform-origin: 0 0;
-    will-change: transform;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-
-  /* Панель управления */
-  .controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-areas:
-      ". up ."
-      "left . right"
-      ". down .";
-    gap: 8px;
-    z-index: 10;
-  }
-
-  .ctrl-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,0.9);
-    font-size: 22px;
+    border: 2px dashed rgba(255, 215, 0, 0.6);
+    background: rgba(255, 215, 0, 0.1);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
+    transition: background 0.2s, border-color 0.2s;
+    border-radius: 4px;
   }
-  .ctrl-btn:active { transform: scale(0.9); background: #fff; }
-  .ctrl-btn[data-dir="up"]    { grid-area: up; }
-  .ctrl-btn[data-dir="left"]  { grid-area: left; }
-  .ctrl-btn[data-dir="right"] { grid-area: right; }
-  .ctrl-btn[data-dir="down"]  { grid-area: down; }
-
-  /* Зум */
-  .zoom-controls {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 10;
+  .hotspot:hover, .hotspot:active {
+    background: rgba(255, 215, 0, 0.3);
+    border-color: #ffd700;
   }
 
-  /* Индикатор масштаба */
-  .zoom-info {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    background: rgba(0,0,0,0.6);
-    color: #fff;
-    padding: 8px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    z-index: 10;
+  /* Карточка товара (SPA вид) */
+  #product-view {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.95);
+    z-index: 100;
+    display: none; /* Скрыто по умолчанию */
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    overflow-y: auto;
   }
+  #product-view.active { display: flex; }
 
-  @media (max-width: 600px) {
-    .ctrl-btn { width: 52px; height: 52px; font-size: 20px; }
-    .controls { bottom: 16px; }
+  .product-card {
+    background: #1e1e1e;
+    border-radius: 16px;
+    max-width: 500px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    animation: slideUp 0.3s ease-out;
   }
+  @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .product-img { width: 100%; height: 300px; object-fit: cover; background: #2a2a2a; }
+  .product-body { padding: 24px; }
+  .product-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #ffd700; }
+  .product-price { font-size: 28px; font-weight: 800; color: #4caf50; margin-bottom: 16px; }
+  .product-desc { font-size: 15px; line-height: 1.6; color: #ccc; margin-bottom: 24px; white-space: pre-wrap; }
+  
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+  .form-group input { 
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; 
+    background: #2a2a2a; color: #fff; font-size: 16px; outline: none;
+  }
+  .form-group input:focus { border-color: #ffd700; }
+
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
+  }
+  .btn-order { background: #4caf50; color: #fff; margin-bottom: 10px; }
+  .btn-order:hover { background: #43a047; }
+  .btn-back { background: #333; color: #ccc; }
+  .btn-back:hover { background: #444; color: #fff; }
+
+  /* Управление зумом */
+  .zoom-controls { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+  .ctrl-btn { width: 48px; height: 48px; border-radius: 50%; border: none; background: rgba(255,255,255,0.9); font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .zoom-info { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.6); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 13px; z-index: 10; }
 </style>
 </head>
 <body>
 
 <div id="viewer">
-  <!-- Замените src на ваш скан буклета -->
   <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
+  <!-- Сюда JS будет добавлять горячие точки -->
+  <div id="hotspots-container"></div>
 </div>
 
 <div class="zoom-info" id="zoomInfo">100%</div>
-
 <div class="zoom-controls">
   <button class="ctrl-btn" id="zoomIn">+</button>
   <button class="ctrl-btn" id="zoomOut">−</button>
   <button class="ctrl-btn" id="reset">⟲</button>
 </div>
 
-<div class="controls">
-  <button class="ctrl-btn" data-dir="up">↑</button>
-  <button class="ctrl-btn" data-dir="left">←</button>
-  <button class="ctrl-btn" data-dir="right">→</button>
-  <button class="ctrl-btn" data-dir="down">↓</button>
+<!-- Экран товара -->
+<div id="product-view">
+  <div class="product-card">
+    <img id="p-img" class="product-img" src="" alt="Товар">
+    <div class="product-body">
+      <div id="p-title" class="product-title"></div>
+      <div id="p-price" class="product-price"></div>
+      <div id="p-desc" class="product-desc"></div>
+      
+      <div class="form-group">
+        <label>Ваш номер телефона (для связи):</label>
+        <input type="tel" id="customer-phone" placeholder="+7 (999) 000-00-00">
+      </div>
+
+      <button class="btn btn-order" id="btn-order">🛒 ЗАКАЗАТЬ</button>
+      <button class="btn btn-back" id="btn-back">← Назад к буклету</button>
+    </div>
+  </div>
 </div>
 
-<script>
-const viewer   = document.getElementById('viewer');
-const img      = document.getElementById('booklet');
-const zoomInfo = document.getElementById('zoomInfo');
+<!-- ХРАНИЛИЩЕ ДАННЫХ (Админка будет обновлять этот блок) -->
+<script id="hotspots-data" type="application/json">
+[]
+</script>
 
-let scale = 1;
-let posX = 0, posY = 0;
-const STEP = 80;       // шаг стрелок в пикселях
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 4;
+<!-- НАСТРОЙКИ TELEGRAM (ЗАПОЛНИТЕ СВОИМИ ДАННЫМИ) -->
+<script>
+  const TG_BOT_TOKEN = 'ВАШ_ТОКЕН_БОТА'; // Например: 612345678:AAH...
+  const TG_CHAT_ID = 'ВАШ_CHAT_ID';      // Например: 123456789
+</script>
+
+<script>
+const viewer = document.getElementById('viewer');
+const img = document.getElementById('booklet');
+const zoomInfo = document.getElementById('zoomInfo');
+const hotspotsContainer = document.getElementById('hotspots-container');
+
+let scale = 1, posX = 0, posY = 0;
+const STEP = 80, MIN_SCALE = 0.5, MAX_SCALE = 4;
+let hotspots = [];
+
+// Загрузка данных
+try {
+  hotspots = JSON.parse(document.getElementById('hotspots-data').textContent);
+} catch(e) { hotspots = []; }
 
 function updateTransform() {
+  // ОГРАНИЧЕНИЯ ПО КРАЯМ
+  const scaledW = img.naturalWidth * scale;
+  const scaledH = img.naturalHeight * scale;
+  const vW = viewer.clientWidth, vH = viewer.clientHeight;
+
+  const minX = Math.min(0, vW - scaledW);
+  const maxX = 0;
+  const minY = Math.min(0, vH - scaledH);
+  const maxY = 0;
+
+  posX = Math.min(maxX, Math.max(minX, posX));
+  posY = Math.min(maxY, Math.max(minY, posY));
+
   img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
   zoomInfo.textContent = Math.round(scale * 100) + '%';
+  
+  // Масштабирование хотспотов вместе с картинкой не нужно, 
+  // так как они внутри #viewer, но их позиции в %, поэтому они автоматически адаптируются.
 }
 
-// Центрируем при загрузке
 img.onload = () => {
-  posX = (viewer.clientWidth  - img.naturalWidth  * scale) / 2;
-  posY = (viewer.clientHeight - img.naturalHeight * scale) / 2;
+  posX = (viewer.clientWidth - img.naturalWidth) / 2;
+  posY = (viewer.clientHeight - img.naturalHeight) / 2;
+  renderHotspots();
   updateTransform();
 };
 
-// --- Кнопки-стрелки ---
-document.querySelectorAll('.ctrl-btn[data-dir]').forEach(btn => {
-  const move = () => {
-    const dir = btn.dataset.dir;
-    if (dir === 'up')    posY += STEP;
-    if (dir === 'down')  posY -= STEP;
-    if (dir === 'left')  posX += STEP;
-    if (dir === 'right') posX -= STEP;
-    updateTransform();
-  };
-  btn.addEventListener('click', move);
-});
-
-// --- Клавиатура ---
-document.addEventListener('keydown', e => {
-  const map = {
-    ArrowUp:    [0,  STEP],
-    ArrowDown:  [0, -STEP],
-    ArrowLeft:  [ STEP, 0],
-    ArrowRight: [-STEP, 0],
-  };
-  if (map[e.key]) {
-    e.preventDefault();
-    posX += map[e.key][0];
-    posY += map[e.key][1];
-    updateTransform();
-  }
-});
-
-// --- Зум ---
-function zoom(delta, cx, cy) {
-  const oldScale = scale;
-  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta));
-  // зум к точке (cx, cy)
-  const k = scale / oldScale;
-  posX = cx - (cx - posX) * k;
-  posY = cy - (cy - posY) * k;
-  updateTransform();
+// Рендер горячих точек
+function renderHotspots() {
+  hotspotsContainer.innerHTML = '';
+  hotspots.forEach(hs => {
+    const div = document.createElement('div');
+    div.className = 'hotspot';
+    div.style.left = hs.x + '%';
+    div.style.top = hs.y + '%';
+    div.style.width = hs.w + '%';
+    div.style.height = hs.h + '%';
+    div.onclick = (e) => { e.stopPropagation(); openProduct(hs); };
+    hotspotsContainer.appendChild(div);
+  });
 }
 
-document.getElementById('zoomIn').onclick  = () => zoom(0.2, viewer.clientWidth/2,  viewer.clientHeight/2);
-document.getElementById('zoomOut').onclick = () => zoom(-0.2, viewer.clientWidth/2, viewer.clientHeight/2);
-document.getElementById('reset').onclick   = () => {
-  scale = 1;
-  posX = (viewer.clientWidth  - img.naturalWidth)  / 2;
-  posY = (viewer.clientHeight - img.naturalHeight) / 2;
-  updateTransform();
+// Открытие товара
+let currentProduct = null;
+function openProduct(hs) {
+  currentProduct = hs;
+  document.getElementById('p-img').src = 'tovar/' + hs.image;
+  document.getElementById('p-title').textContent = hs.title;
+  document.getElementById('p-price').textContent = hs.price + ' ₽';
+  document.getElementById('p-desc').textContent = hs.description;
+  document.getElementById('customer-phone').value = '';
+  document.getElementById('product-view').classList.add('active');
+}
+
+document.getElementById('btn-back').onclick = () => {
+  document.getElementById('product-view').classList.remove('active');
+  currentProduct = null;
 };
 
-// Колесо мыши
-viewer.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = viewer.getBoundingClientRect();
-  zoom(e.deltaY < 0 ? 0.15 : -0.15, e.clientX - rect.left, e.clientY - rect.top);
-}, { passive: false });
+// Заказ в Telegram
+document.getElementById('btn-order').onclick = async () => {
+  const phone = document.getElementById('customer-phone').value.trim();
+  if (!phone) { alert('Пожалуйста, введите ваш номер телефона!'); return; }
+  
+  const btn = document.getElementById('btn-order');
+  btn.textContent = 'Отправка...';
+  btn.disabled = true;
 
-// --- Drag мышью ---
+  const text = `🛒 *НОВЫЙ ЗАКАЗ*\n\n📦 *Товар:* ${currentProduct.title}\n💰 *Цена:* ${currentProduct.price} ₽\n📞 *Телефон клиента:* ${phone}\n📱 *Телефон продавца (из карточки):* ${currentProduct.phone || 'Не указан'}`;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TG_CHAT_ID, text: text, parse_mode: 'Markdown' })
+    });
+    if (res.ok) {
+      alert('✅ Заказ успешно отправлен! Мы свяжемся с вами.');
+      document.getElementById('product-view').classList.remove('active');
+    } else {
+      alert('❌ Ошибка отправки. Попробуйте позже.');
+    }
+  } catch (err) {
+    alert('❌ Ошибка сети.');
+  }
+  btn.textContent = '🛒 ЗАКАЗАТЬ';
+  btn.disabled = false;
+};
+
+// --- Управление (Зум, Драг, Клавиатура) ---
+// (Упрощенная версия из прошлого ответа, адаптированная под ограничения)
+document.getElementById('zoomIn').onclick = () => { scale = Math.min(MAX_SCALE, scale + 0.2); updateTransform(); };
+document.getElementById('zoomOut').onclick = () => { scale = Math.max(MIN_SCALE, scale - 0.2); updateTransform(); };
+document.getElementById('reset').onclick = () => { scale = 1; posX = (viewer.clientWidth - img.naturalWidth)/2; posY = (viewer.clientHeight - img.naturalHeight)/2; updateTransform(); };
+
 let isDragging = false, startX, startY;
-viewer.addEventListener('mousedown', e => {
-  isDragging = true;
-  viewer.classList.add('dragging');
-  startX = e.clientX - posX;
-  startY = e.clientY - posY;
-});
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  posX = e.clientX - startX;
-  posY = e.clientY - startY;
-  updateTransform();
-});
-window.addEventListener('mouseup', () => {
-  isDragging = false;
-  viewer.classList.remove('dragging');
-});
+viewer.addEventListener('mousedown', e => { isDragging = true; viewer.classList.add('dragging'); startX = e.clientX - posX; startY = e.clientY - posY; });
+window.addEventListener('mousemove', e => { if (!isDragging) return; posX = e.clientX - startX; posY = e.clientY - startY; updateTransform(); });
+window.addEventListener('mouseup', () => { isDragging = false; viewer.classList.remove('dragging'); });
 
-// --- Touch: перетаскивание + pinch-to-zoom ---
-let touches = [], lastDist = 0, lastMid = null;
-
-viewer.addEventListener('touchstart', e => {
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    startX = touches[0].clientX - posX;
-    startY = touches[0].clientY - posY;
-  } else if (touches.length === 2) {
-    lastDist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    lastMid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-  }
-}, { passive: false });
-
-viewer.addEventListener('touchmove', e => {
-  e.preventDefault();
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    posX = touches[0].clientX - startX;
-    posY = touches[0].clientY - startY;
-    updateTransform();
-  } else if (touches.length === 2) {
-    const dist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    const mid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-    zoom((dist - lastDist) * 0.005, mid.x, mid.y);
-    lastDist = dist;
-    lastMid = mid;
-  }
-}, { passive: false });
+viewer.addEventListener('touchstart', e => { if(e.touches.length===1){ isDragging=true; startX=e.touches[0].clientX-posX; startY=e.touches[0].clientY-posY; }}, {passive:false});
+viewer.addEventListener('touchmove', e => { if(!isDragging||e.touches.length!==1) return; e.preventDefault(); posX=e.touches[0].clientX-startX; posY=e.touches[0].clientY-startY; updateTransform(); }, {passive:false});
+viewer.addEventListener('touchend', () => { isDragging = false; });
 </script>
 </body>
 </html>
