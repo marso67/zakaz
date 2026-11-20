@@ -7,7 +7,6 @@
 <style>
   body { font-family: system-ui, sans-serif; background: #1a1a1a; color: #fff; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
   
-  /* Модалки */
   .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; }
   .modal.active { display: flex; }
   .modal-content { background: #2a2a2a; padding: 24px; border-radius: 12px; max-width: 600px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
@@ -22,37 +21,30 @@
   .btn-row { display: flex; gap: 10px; margin-top: 10px; }
   .btn-row .btn { width: 50%; margin-top: 0; }
 
-  /* Кнопка добавления */
-  #add-btn { 
-    position: fixed; top: 20px; right: 20px; background: #ffd700; color: #000; z-index: 100; 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; 
-  }
-  #add-btn.active { background: #ff5252; color: #fff; } /* Красный, когда режим рисования включен */
+  #add-btn { position: fixed; top: 20px; right: 20px; background: #ffd700; color: #000; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; }
+  #add-btn.active { background: #ff5252; color: #fff; }
 
-  /* Вьювер админки */
-  #admin-viewer { 
-    position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: grab; touch-action: none; 
-  }
+  #admin-viewer { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: grab; touch-action: none; }
   #admin-viewer.drawing { cursor: crosshair; }
   #admin-viewer.panning { cursor: grabbing; }
 
-  #booklet-wrapper {
-    position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform;
-  }
+  #booklet-wrapper { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
   #booklet { display: block; user-select: none; -webkit-user-drag: none; }
 
-  /* Рамка выделения (внутри wrapper, чтобы масштабировалась вместе с картинкой) */
-  #selection-box { 
-    position: absolute; border: 2px dashed #ffd700; background: rgba(255, 215, 0, 0.2); 
-    pointer-events: none; display: none; 
-  }
+  /* Рамка выделения (видна только во время рисования) */
+  #selection-box { position: absolute; border: 2px dashed #ffd700; background: rgba(255, 215, 0, 0.2); pointer-events: none; display: none; }
 
-  /* Управление зумом */
+  /* Существующие зоны в админке: невидимы, но подсвечиваются при наведении, чтобы вы знали, где они */
+  .existing-hotspot {
+    position: absolute; border: 2px solid transparent; background: transparent;
+    cursor: help; transition: all 0.2s; border-radius: 4px; z-index: 5;
+  }
+  .existing-hotspot:hover { border-color: rgba(0, 255, 136, 0.6); background: rgba(0, 255, 136, 0.1); }
+
   .zoom-controls { position: fixed; top: 20px; right: 80px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
   .ctrl-btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: rgba(255,255,255,0.9); font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
   .zoom-info { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.6); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 13px; z-index: 100; }
 
-  /* Форма */
   .form-group { margin-bottom: 16px; }
   .form-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 14px; }
   .form-group input, .form-group textarea { width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; font-size: 15px; box-sizing: border-box; }
@@ -61,17 +53,15 @@
 </head>
 <body>
 
-<!-- 1. Модалка ввода кода -->
 <div id="paste-modal" class="modal active">
   <div class="modal-content">
     <h2>📋 Загрузка актуального кода</h2>
-    <p style="color:#aaa; font-size:14px; margin: 8px 0 16px;">Откройте ваш <b>index.html</b>, скопируйте весь код и вставьте его сюда. Это нужно, чтобы сохранить уже добавленные товары.</p>
+    <p style="color:#aaa; font-size:14px; margin: 8px 0 16px;">Скопируйте ВЕСЬ код из вашего <b>index.html</b> и вставьте его сюда.</p>
     <textarea id="code-input" class="code-area" placeholder="<html>..."></textarea>
     <button class="btn btn-primary" onclick="loadCode()">Загрузить и начать</button>
   </div>
 </div>
 
-<!-- 2. Модалка подтверждения -->
 <div id="confirm-modal" class="modal">
   <div class="modal-content" style="max-width: 400px; text-align: center;">
     <h2>✅ Область выделена</h2>
@@ -83,36 +73,19 @@
   </div>
 </div>
 
-<!-- 3. Модалка формы товара -->
 <div id="form-modal" class="modal">
   <div class="modal-content">
     <h2>📦 Новый товар</h2>
-    <div class="form-group">
-      <label>Имя файла фото (из папки tovar/)</label>
-      <input type="text" id="f-image" placeholder="001.jpg">
-    </div>
-    <div class="form-group">
-      <label>Название товара</label>
-      <input type="text" id="f-title" placeholder="Например: Услуга 'Под ключ'">
-    </div>
-    <div class="form-group">
-      <label>Описание товара</label>
-      <textarea id="f-desc" rows="3" placeholder="Краткое описание..."></textarea>
-    </div>
-    <div class="form-group">
-      <label>Цена</label>
-      <input type="text" id="f-price" placeholder="5000">
-    </div>
-    <div class="form-group">
-      <label>Ваш номер телефона (для отображения в карточке)</label>
-      <input type="text" id="f-phone" placeholder="+7 (999) 123-45-67">
-    </div>
+    <div class="form-group"><label>Имя файла фото (из папки tovar/)</label><input type="text" id="f-image" placeholder="001.jpg"></div>
+    <div class="form-group"><label>Название товара</label><input type="text" id="f-title" placeholder="Услуга 'Под ключ'"></div>
+    <div class="form-group"><label>Описание товара</label><textarea id="f-desc" rows="3" placeholder="Краткое описание..."></textarea></div>
+    <div class="form-group"><label>Цена</label><input type="text" id="f-price" placeholder="5000"></div>
+    <div class="form-group"><label>Ваш номер телефона</label><input type="text" id="f-phone" placeholder="+7 (999) 123-45-67"></div>
     <button class="btn btn-primary" onclick="saveProduct()">💾 Сохранить и скопировать новый код</button>
     <button class="btn btn-secondary" onclick="closeForm()">Закрыть форму</button>
   </div>
 </div>
 
-<!-- Интерфейс админки -->
 <button id="add-btn" class="btn" onclick="toggleDrawingMode()">➕ Добавить область</button>
 
 <div class="zoom-info" id="zoomInfo">100%</div>
@@ -125,6 +98,7 @@
 <div id="admin-viewer">
   <div id="booklet-wrapper">
     <img id="booklet" src="../booklet.jpg" alt="Буклет" draggable="false">
+    <div id="existing-hotspots-container"></div>
     <div id="selection-box"></div>
   </div>
 </div>
@@ -146,67 +120,41 @@ const wrapper = document.getElementById('booklet-wrapper');
 const img = document.getElementById('booklet');
 const selBox = document.getElementById('selection-box');
 const addBtn = document.getElementById('add-btn');
+const existingContainer = document.getElementById('existing-hotspots-container');
 
-// 1. Загрузка кода
 function loadCode() {
   const code = document.getElementById('code-input').value.trim();
   if (!code || !code.includes('hotspots-data')) {
-    alert('Ошибка: Вставленный код не содержит блок hotspots-data. Скопируйте ВЕСЬ код из вашего index.html');
+    alert('Ошибка: Вставленный код не содержит блок hotspots-data.');
     return;
   }
   baseHtml = code;
   const match = code.match(/<script id="hotspots-data" type="application\/json">([\s\S]*?)<\/script>/);
-  if (match) {
-    try { hotspots = JSON.parse(match[1]); } catch(e) { hotspots = []; }
-  }
+  if (match) { try { hotspots = JSON.parse(match[1]); } catch(e) { hotspots = []; } }
   
   document.getElementById('paste-modal').classList.remove('active');
   addBtn.style.display = 'block';
   
-  // Центрируем после загрузки картинки
-  img.onload = () => {
-    resetView();
-  };
+  img.onload = () => { resetView(); renderExisting(); };
 }
 
-// 2. Управление зумом и границами
 function updateTransform() {
   const scaledW = img.naturalWidth * scale;
   const scaledH = img.naturalHeight * scale;
   const vW = viewer.clientWidth, vH = viewer.clientHeight;
-
-  // Ограничения, чтобы не улететь за края
-  const minX = Math.min(0, vW - scaledW);
-  const maxX = 0;
-  const minY = Math.min(0, vH - scaledH);
-  const maxY = 0;
-
+  const minX = Math.min(0, vW - scaledW), maxX = 0;
+  const minY = Math.min(0, vH - scaledH), maxY = 0;
   posX = Math.min(maxX, Math.max(minX, posX));
   posY = Math.min(maxY, Math.max(minY, posY));
-
   wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
   document.getElementById('zoomInfo').textContent = Math.round(scale * 100) + '%';
 }
 
-function changeZoom(delta) {
-  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta));
-  updateTransform();
-}
+function changeZoom(delta) { scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta)); updateTransform(); }
+function resetView() { scale = 1; posX = (viewer.clientWidth - img.naturalWidth) / 2; posY = (viewer.clientHeight - img.naturalHeight) / 2; updateTransform(); }
 
-function resetView() {
-  scale = 1;
-  posX = (viewer.clientWidth - img.naturalWidth) / 2;
-  posY = (viewer.clientHeight - img.naturalHeight) / 2;
-  updateTransform();
-}
+viewer.addEventListener('wheel', e => { e.preventDefault(); changeZoom(e.deltaY < 0 ? 0.1 : -0.1); }, { passive: false });
 
-// Колесико мыши
-viewer.addEventListener('wheel', e => {
-  e.preventDefault();
-  changeZoom(e.deltaY < 0 ? 0.1 : -0.1);
-}, { passive: false });
-
-// 3. Переключение режимов
 function toggleDrawingMode() {
   isDrawingMode = !isDrawingMode;
   if (isDrawingMode) {
@@ -221,63 +169,50 @@ function toggleDrawingMode() {
   }
 }
 
-// 4. Обработка мыши / тача (Панорамирование ИЛИ Рисование)
+function renderExisting() {
+  existingContainer.innerHTML = '';
+  hotspots.forEach(hs => {
+    const div = document.createElement('div');
+    div.className = 'existing-hotspot';
+    div.style.left = hs.x + '%'; div.style.top = hs.y + '%';
+    div.style.width = hs.w + '%'; div.style.height = hs.h + '%';
+    div.title = hs.title; // Подсказка при наведении
+    existingContainer.appendChild(div);
+  });
+}
+
 viewer.addEventListener('mousedown', e => {
   if (isDrawingMode) {
     isDrawing = true;
     const rect = wrapper.getBoundingClientRect();
-    // Координаты относительно самой картинки (с учетом зума)
     startX_img = (e.clientX - rect.left) / scale;
     startY_img = (e.clientY - rect.top) / scale;
-    selBox.style.left = startX_img + 'px';
-    selBox.style.top = startY_img + 'px';
-    selBox.style.width = '0px';
-    selBox.style.height = '0px';
-    selBox.style.display = 'block';
+    selBox.style.left = startX_img + 'px'; selBox.style.top = startY_img + 'px';
+    selBox.style.width = '0px'; selBox.style.height = '0px'; selBox.style.display = 'block';
   } else {
-    isPanning = true;
-    viewer.classList.add('panning');
-    startPanX = e.clientX - posX;
-    startPanY = e.clientY - posY;
+    isPanning = true; viewer.classList.add('panning');
+    startPanX = e.clientX - posX; startPanY = e.clientY - posY;
   }
 });
 
 window.addEventListener('mousemove', e => {
-  if (isPanning) {
-    posX = e.clientX - startPanX;
-    posY = e.clientY - startPanY;
-    updateTransform();
-    return;
-  }
+  if (isPanning) { posX = e.clientX - startPanX; posY = e.clientY - startPanY; updateTransform(); return; }
   if (!isDrawing || !isDrawingMode) return;
-  
   const rect = wrapper.getBoundingClientRect();
   const currentX_img = (e.clientX - rect.left) / scale;
   const currentY_img = (e.clientY - rect.top) / scale;
-  
-  const width = Math.abs(currentX_img - startX_img);
-  const height = Math.abs(currentY_img - startY_img);
-  const left = Math.min(currentX_img, startX_img);
-  const top = Math.min(currentY_img, startY_img);
-  
-  selBox.style.left = left + 'px';
-  selBox.style.top = top + 'px';
-  selBox.style.width = width + 'px';
-  selBox.style.height = height + 'px';
+  const width = Math.abs(currentX_img - startX_img), height = Math.abs(currentY_img - startY_img);
+  const left = Math.min(currentX_img, startX_img), top = Math.min(currentY_img, startY_img);
+  selBox.style.left = left + 'px'; selBox.style.top = top + 'px';
+  selBox.style.width = width + 'px'; selBox.style.height = height + 'px';
 });
 
 window.addEventListener('mouseup', () => {
-  if (isPanning) {
-    isPanning = false;
-    viewer.classList.remove('panning');
-  }
-  if (isDrawing) {
-    isDrawing = false;
-    finishDrawing();
-  }
+  if (isPanning) { isPanning = false; viewer.classList.remove('panning'); }
+  if (isDrawing) { isDrawing = false; finishDrawing(); }
 });
 
-// Поддержка тач-событий для мобильных (упрощенная)
+// Touch поддержка
 viewer.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
     if (isDrawingMode) {
@@ -285,130 +220,68 @@ viewer.addEventListener('touchstart', e => {
       const rect = wrapper.getBoundingClientRect();
       startX_img = (e.touches[0].clientX - rect.left) / scale;
       startY_img = (e.touches[0].clientY - rect.top) / scale;
-      selBox.style.left = startX_img + 'px';
-      selBox.style.top = startY_img + 'px';
-      selBox.style.width = '0px';
-      selBox.style.height = '0px';
-      selBox.style.display = 'block';
+      selBox.style.left = startX_img + 'px'; selBox.style.top = startY_img + 'px';
+      selBox.style.width = '0px'; selBox.style.height = '0px'; selBox.style.display = 'block';
     } else {
-      isPanning = true;
-      startPanX = e.touches[0].clientX - posX;
-      startPanY = e.touches[0].clientY - posY;
+      isPanning = true; startPanX = e.touches[0].clientX - posX; startPanY = e.touches[0].clientY - posY;
     }
   }
 }, { passive: false });
 
 viewer.addEventListener('touchmove', e => {
   if (e.touches.length === 1) {
-    if (isPanning) {
-      e.preventDefault();
-      posX = e.touches[0].clientX - startPanX;
-      posY = e.touches[0].clientY - startPanY;
-      updateTransform();
-    } else if (isDrawing) {
+    if (isPanning) { e.preventDefault(); posX = e.touches[0].clientX - startPanX; posY = e.touches[0].clientY - startPanY; updateTransform(); } 
+    else if (isDrawing) {
       e.preventDefault();
       const rect = wrapper.getBoundingClientRect();
       const currentX_img = (e.touches[0].clientX - rect.left) / scale;
       const currentY_img = (e.touches[0].clientY - rect.top) / scale;
-      
-      const width = Math.abs(currentX_img - startX_img);
-      const height = Math.abs(currentY_img - startY_img);
-      const left = Math.min(currentX_img, startX_img);
-      const top = Math.min(currentY_img, startY_img);
-      
-      selBox.style.left = left + 'px';
-      selBox.style.top = top + 'px';
-      selBox.style.width = width + 'px';
-      selBox.style.height = height + 'px';
+      const width = Math.abs(currentX_img - startX_img), height = Math.abs(currentY_img - startY_img);
+      const left = Math.min(currentX_img, startX_img), top = Math.min(currentY_img, startY_img);
+      selBox.style.left = left + 'px'; selBox.style.top = top + 'px';
+      selBox.style.width = width + 'px'; selBox.style.height = height + 'px';
     }
   }
 }, { passive: false });
 
-viewer.addEventListener('touchend', () => {
-  if (isPanning) isPanning = false;
-  if (isDrawing) {
-    isDrawing = false;
-    finishDrawing();
-  }
-});
+viewer.addEventListener('touchend', () => { if (isPanning) isPanning = false; if (isDrawing) { isDrawing = false; finishDrawing(); } });
 
-// 5. Логика завершения рисования и модалок
 function finishDrawing() {
-  isDrawingMode = false; // Выключаем режим рисования
-  toggleDrawingMode(); // Обновляем кнопку
+  isDrawingMode = false; toggleDrawingMode();
+  const wPx = parseFloat(selBox.style.width), hPx = parseFloat(selBox.style.height);
+  if (wPx < 15 || hPx < 15) { selBox.style.display = 'none'; return; }
   
-  const wPx = parseFloat(selBox.style.width);
-  const hPx = parseFloat(selBox.style.height);
-  
-  if (wPx < 15 || hPx < 15) {
-    selBox.style.display = 'none'; // Слишком мелко, игнорируем
-    return;
-  }
-  
-  // Сохраняем координаты в процентах от реального размера картинки
   currentRect = {
     x: (parseFloat(selBox.style.left) / img.naturalWidth * 100).toFixed(2),
     y: (parseFloat(selBox.style.top) / img.naturalHeight * 100).toFixed(2),
     w: (wPx / img.naturalWidth * 100).toFixed(2),
     h: (hPx / img.naturalHeight * 100).toFixed(2)
   };
-  
-  selBox.style.display = 'none'; // Скрываем рамку, данные уже в currentRect
-  
-  // Показываем модалку подтверждения
+  selBox.style.display = 'none';
   document.getElementById('confirm-modal').classList.add('active');
 }
 
-function cancelSelection() {
-  document.getElementById('confirm-modal').classList.remove('active');
-  currentRect = {};
-}
+function cancelSelection() { document.getElementById('confirm-modal').classList.remove('active'); currentRect = {}; }
+function showDataForm() { document.getElementById('confirm-modal').classList.remove('active'); document.getElementById('form-modal').classList.add('active'); }
+function closeForm() { document.getElementById('form-modal').classList.remove('active'); ['f-image','f-title','f-desc','f-price','f-phone'].forEach(id => document.getElementById(id).value = ''); currentRect = {}; }
 
-function showDataForm() {
-  document.getElementById('confirm-modal').classList.remove('active');
-  document.getElementById('form-modal').classList.add('active');
-}
-
-function closeForm() {
-  document.getElementById('form-modal').classList.remove('active');
-  // Очищаем поля
-  ['f-image','f-title','f-desc','f-price','f-phone'].forEach(id => document.getElementById(id).value = '');
-  currentRect = {};
-}
-
-// 6. Сохранение и генерация кода
 function saveProduct() {
   const newProduct = {
-    id: Date.now(),
-    x: currentRect.x, y: currentRect.y, w: currentRect.w, h: currentRect.h,
-    image: document.getElementById('f-image').value.trim(),
-    title: document.getElementById('f-title').value.trim(),
-    description: document.getElementById('f-desc').value.trim(),
-    price: document.getElementById('f-price').value.trim(),
+    id: Date.now(), x: currentRect.x, y: currentRect.y, w: currentRect.w, h: currentRect.h,
+    image: document.getElementById('f-image').value.trim(), title: document.getElementById('f-title').value.trim(),
+    description: document.getElementById('f-desc').value.trim(), price: document.getElementById('f-price').value.trim(),
     phone: document.getElementById('f-phone').value.trim()
   };
-  
-  if (!newProduct.title || !newProduct.image) {
-    alert('⚠️ Заполните хотя бы "Имя файла фото" и "Название товара"!');
-    return;
-  }
+  if (!newProduct.title || !newProduct.image) { alert('⚠️ Заполните хотя бы имя файла и название!'); return; }
   
   hotspots.push(newProduct);
-  
-  // Генерируем новый HTML
   const jsonStr = JSON.stringify(hotspots, null, 2);
-  const newHtml = baseHtml.replace(
-    /(<script id="hotspots-data" type="application\/json">)([\s\S]*?)(<\/script>)/,
-    `$1\n${jsonStr}\n$3`
-  );
+  const newHtml = baseHtml.replace(/(<script id="hotspots-data" type="application\/json">)([\s\S]*?)(<\/script>)/, `$1\n${jsonStr}\n$3`);
   
-  // Копируем в буфер
   navigator.clipboard.writeText(newHtml).then(() => {
-    alert('✅ НОВЫЙ КОД СКОПИРОВАН!\n\nДействия:\n1. Откройте index.html в редакторе.\n2. Замените весь текст (Ctrl+A -> Ctrl+V).\n3. Сделайте Commit в GitHub.');
-    closeForm();
-  }).catch(err => {
-    alert('❌ Ошибка копирования. Разрешите сайту доступ к буферу обмена.');
-  });
+    alert('✅ КОД СКОПИРОВАН!\n\n1. Откройте index.html\n2. Замените весь текст (Ctrl+A -> Ctrl+V)\n3. Сделайте Commit в GitHub.');
+    closeForm(); renderExisting();
+  }).catch(() => alert('❌ Ошибка копирования. Разрешите доступ к буферу.'));
 }
 </script>
 </body>
