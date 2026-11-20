@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Буклет-навигатор</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    font-family: system-ui, sans-serif;
+    background: #1a1a1a;
+    height: 100vh;
+    overflow: hidden;
+    touch-action: none; /* отключаем системные жесты */
+  }
+
+  #viewer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    cursor: grab;
+  }
+  #viewer.dragging { cursor: grabbing; }
+
+  #booklet {
+    position: absolute;
+    top: 0; left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* Панель управления */
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-areas:
+      ". up ."
+      "left . right"
+      ". down .";
+    gap: 8px;
+    z-index: 10;
+  }
+
+  .ctrl-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+  }
+  .ctrl-btn:active { transform: scale(0.9); background: #fff; }
+  .ctrl-btn[data-dir="up"]    { grid-area: up; }
+  .ctrl-btn[data-dir="left"]  { grid-area: left; }
+  .ctrl-btn[data-dir="right"] { grid-area: right; }
+  .ctrl-btn[data-dir="down"]  { grid-area: down; }
+
+  /* Зум */
+  .zoom-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+  }
+
+  /* Индикатор масштаба */
+  .zoom-info {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    z-index: 10;
+  }
+
+  @media (max-width: 600px) {
+    .ctrl-btn { width: 52px; height: 52px; font-size: 20px; }
+    .controls { bottom: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="viewer">
+  <!-- Замените src на ваш скан буклета -->
+  <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
+</div>
+
+<div class="zoom-info" id="zoomInfo">100%</div>
+
+<div class="zoom-controls">
+  <button class="ctrl-btn" id="zoomIn">+</button>
+  <button class="ctrl-btn" id="zoomOut">−</button>
+  <button class="ctrl-btn" id="reset">⟲</button>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn" data-dir="up">↑</button>
+  <button class="ctrl-btn" data-dir="left">←</button>
+  <button class="ctrl-btn" data-dir="right">→</button>
+  <button class="ctrl-btn" data-dir="down">↓</button>
+</div>
+
+<script>
+const viewer   = document.getElementById('viewer');
+const img      = document.getElementById('booklet');
+const zoomInfo = document.getElementById('zoomInfo');
+
+let scale = 1;
+let posX = 0, posY = 0;
+const STEP = 80;       // шаг стрелок в пикселях
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 4;
+
+function updateTransform() {
+  img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+  zoomInfo.textContent = Math.round(scale * 100) + '%';
+}
+
+// Центрируем при загрузке
+img.onload = () => {
+  posX = (viewer.clientWidth  - img.naturalWidth  * scale) / 2;
+  posY = (viewer.clientHeight - img.naturalHeight * scale) / 2;
+  updateTransform();
+};
+
+// --- Кнопки-стрелки ---
+document.querySelectorAll('.ctrl-btn[data-dir]').forEach(btn => {
+  const move = () => {
+    const dir = btn.dataset.dir;
+    if (dir === 'up')    posY += STEP;
+    if (dir === 'down')  posY -= STEP;
+    if (dir === 'left')  posX += STEP;
+    if (dir === 'right') posX -= STEP;
+    updateTransform();
+  };
+  btn.addEventListener('click', move);
+});
+
+// --- Клавиатура ---
+document.addEventListener('keydown', e => {
+  const map = {
+    ArrowUp:    [0,  STEP],
+    ArrowDown:  [0, -STEP],
+    ArrowLeft:  [ STEP, 0],
+    ArrowRight: [-STEP, 0],
+  };
+  if (map[e.key]) {
+    e.preventDefault();
+    posX += map[e.key][0];
+    posY += map[e.key][1];
+    updateTransform();
+  }
+});
+
+// --- Зум ---
+function zoom(delta, cx, cy) {
+  const oldScale = scale;
+  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta));
+  // зум к точке (cx, cy)
+  const k = scale / oldScale;
+  posX = cx - (cx - posX) * k;
+  posY = cy - (cy - posY) * k;
+  updateTransform();
+}
+
+document.getElementById('zoomIn').onclick  = () => zoom(0.2, viewer.clientWidth/2,  viewer.clientHeight/2);
+document.getElementById('zoomOut').onclick = () => zoom(-0.2, viewer.clientWidth/2, viewer.clientHeight/2);
+document.getElementById('reset').onclick   = () => {
+  scale = 1;
+  posX = (viewer.clientWidth  - img.naturalWidth)  / 2;
+  posY = (viewer.clientHeight - img.naturalHeight) / 2;
+  updateTransform();
+};
+
+// Колесо мыши
+viewer.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = viewer.getBoundingClientRect();
+  zoom(e.deltaY < 0 ? 0.15 : -0.15, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+// --- Drag мышью ---
+let isDragging = false, startX, startY;
+viewer.addEventListener('mousedown', e => {
+  isDragging = true;
+  viewer.classList.add('dragging');
+  startX = e.clientX - posX;
+  startY = e.clientY - posY;
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  posX = e.clientX - startX;
+  posY = e.clientY - startY;
+  updateTransform();
+});
+window.addEventListener('mouseup', () => {
+  isDragging = false;
+  viewer.classList.remove('dragging');
+});
+
+// --- Touch: перетаскивание + pinch-to-zoom ---
+let touches = [], lastDist = 0, lastMid = null;
+
+viewer.addEventListener('touchstart', e => {
+  touches = [...e.touches];
+  if (touches.length === 1) {
+    startX = touches[0].clientX - posX;
+    startY = touches[0].clientY - posY;
+  } else if (touches.length === 2) {
+    lastDist = Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+    lastMid = {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+}, { passive: false });
+
+viewer.addEventListener('touchmove', e => {
+  e.preventDefault();
+  touches = [...e.touches];
+  if (touches.length === 1) {
+    posX = touches[0].clientX - startX;
+    posY = touches[0].clientY - startY;
+    updateTransform();
+  } else if (touches.length === 2) {
+    const dist = Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+    const mid = {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+    zoom((dist - lastDist) * 0.005, mid.x, mid.y);
+    lastDist = dist;
+    lastMid = mid;
+  }
+}, { passive: false });
+</script>
+</body>
+</html>
