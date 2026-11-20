@@ -10,43 +10,41 @@
   
   #viewer { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: grab; }
   #viewer.dragging { cursor: grabbing; }
-  #booklet { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; user-select: none; -webkit-user-drag: none; }
+  
+  /* Контейнер, который масштабируется. Картинка и зоны внутри него движутся синхронно! */
+  #booklet-wrapper {
+    position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform;
+  }
+  #booklet { display: block; user-select: none; -webkit-user-drag: none; }
 
-  /* Горячие точки */
+  /* НЕВИДИМЫЕ ГОРЯЧИЕ ТОЧКИ */
   .hotspot {
     position: absolute;
-    border: 2px dashed rgba(255, 215, 0, 0.6);
-    background: rgba(255, 215, 0, 0.1);
+    border: 2px solid transparent; /* Прозрачная граница по умолчанию */
+    background: transparent;       /* Прозрачный фон по умолчанию */
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    border-radius: 4px;
+    transition: all 0.25s ease;
+    border-radius: 6px;
+    z-index: 10;
   }
+  /* При наведении мышкой или тапе на мобильном */
   .hotspot:hover, .hotspot:active {
-    background: rgba(255, 215, 0, 0.3);
-    border-color: #ffd700;
+    border-color: rgba(255, 215, 0, 0.8);
+    background: rgba(255, 215, 0, 0.15);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
   }
 
   /* Карточка товара (SPA вид) */
   #product-view {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0,0,0,0.95);
-    z-index: 100;
-    display: none; /* Скрыто по умолчанию */
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    overflow-y: auto;
+    background: rgba(0,0,0,0.92); backdrop-filter: blur(5px);
+    z-index: 100; display: none; justify-content: center; align-items: center; padding: 20px; overflow-y: auto;
   }
   #product-view.active { display: flex; }
 
   .product-card {
-    background: #1e1e1e;
-    border-radius: 16px;
-    max-width: 500px;
-    width: 100%;
-    overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    animation: slideUp 0.3s ease-out;
+    background: #1e1e1e; border-radius: 16px; max-width: 500px; width: 100%;
+    overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6); animation: slideUp 0.3s ease-out;
   }
   @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -64,16 +62,12 @@
   }
   .form-group input:focus { border-color: #ffd700; }
 
-  .btn {
-    width: 100%; padding: 14px; border: none; border-radius: 8px;
-    font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
-  }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; }
   .btn-order { background: #4caf50; color: #fff; margin-bottom: 10px; }
   .btn-order:hover { background: #43a047; }
   .btn-back { background: #333; color: #ccc; }
   .btn-back:hover { background: #444; color: #fff; }
 
-  /* Управление зумом */
   .zoom-controls { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
   .ctrl-btn { width: 48px; height: 48px; border-radius: 50%; border: none; background: rgba(255,255,255,0.9); font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
   .zoom-info { position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.6); color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 13px; z-index: 10; }
@@ -82,9 +76,10 @@
 <body>
 
 <div id="viewer">
-  <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
-  <!-- Сюда JS будет добавлять горячие точки -->
-  <div id="hotspots-container"></div>
+  <div id="booklet-wrapper">
+    <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
+    <div id="hotspots-container"></div>
+  </div>
 </div>
 
 <div class="zoom-info" id="zoomInfo">100%</div>
@@ -94,7 +89,6 @@
   <button class="ctrl-btn" id="reset">⟲</button>
 </div>
 
-<!-- Экран товара -->
 <div id="product-view">
   <div class="product-card">
     <img id="p-img" class="product-img" src="" alt="Товар">
@@ -102,56 +96,37 @@
       <div id="p-title" class="product-title"></div>
       <div id="p-price" class="product-price"></div>
       <div id="p-desc" class="product-desc"></div>
-      
       <div class="form-group">
         <label>Ваш номер телефона (для связи):</label>
         <input type="tel" id="customer-phone" placeholder="+7 (999) 000-00-00">
       </div>
-
       <button class="btn btn-order" id="btn-order">🛒 ЗАКАЗАТЬ</button>
       <button class="btn btn-back" id="btn-back">← Назад к буклету</button>
     </div>
   </div>
 </div>
 
-<!-- ХРАНИЛИЩЕ ДАННЫХ (Админка будет обновлять этот блок) -->
 <script id="hotspots-data" type="application/json">
-[
-  {
-    "id": 1795218199335,
-    "x": "1.44",
-    "y": "3.52",
-    "w": "5.78",
-    "h": "7.90",
-    "image": "u256.jpg",
-    "title": "U 256",
-    "description": "Бла бла бла",
-    "price": "2000",
-    "phone": ""
-  }
-]
+[]
 </script>
 
-<!-- НАСТРОЙКИ TELEGRAM (ЗАПОЛНИТЕ СВОИМИ ДАННЫМИ) -->
 <script>
-  const TG_BOT_TOKEN = 'ВАШ_ТОКЕН_БОТА'; // Например: 612345678:AAH...
-  const TG_CHAT_ID = 'ВАШ_CHAT_ID';      // Например: 123456789
+  const TG_BOT_TOKEN = 'ВАШ_ТОКЕН_БОТА'; 
+  const TG_CHAT_ID = 'ВАШ_CHAT_ID';      
 </script>
 
 <script>
 const viewer = document.getElementById('viewer');
+const wrapper = document.getElementById('booklet-wrapper');
 const img = document.getElementById('booklet');
 const zoomInfo = document.getElementById('zoomInfo');
 const hotspotsContainer = document.getElementById('hotspots-container');
 
 let scale = 1, posX = 0, posY = 0;
-const STEP = 80, MIN_SCALE = 0.5, MAX_SCALE = 4;
+const MIN_SCALE = 0.3, MAX_SCALE = 5;
 let hotspots = [];
 
-// Загрузка данных
-try {
-  hotspots = JSON.parse(document.getElementById('hotspots-data').textContent);
-} catch(e) { hotspots = []; }
+try { hotspots = JSON.parse(document.getElementById('hotspots-data').textContent); } catch(e) { hotspots = []; }
 
 function updateTransform() {
   // ОГРАНИЧЕНИЯ ПО КРАЯМ
@@ -167,11 +142,9 @@ function updateTransform() {
   posX = Math.min(maxX, Math.max(minX, posX));
   posY = Math.min(maxY, Math.max(minY, posY));
 
-  img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+  // Масштабируем ВЕСЬ контейнер (и картинку, и зоны внутри него)
+  wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
   zoomInfo.textContent = Math.round(scale * 100) + '%';
-  
-  // Масштабирование хотспотов вместе с картинкой не нужно, 
-  // так как они внутри #viewer, но их позиции в %, поэтому они автоматически адаптируются.
 }
 
 img.onload = () => {
@@ -181,12 +154,12 @@ img.onload = () => {
   updateTransform();
 };
 
-// Рендер горячих точек
 function renderHotspots() {
   hotspotsContainer.innerHTML = '';
   hotspots.forEach(hs => {
     const div = document.createElement('div');
     div.className = 'hotspot';
+    // Координаты в процентах! Браузер сам масштабирует их при зуме.
     div.style.left = hs.x + '%';
     div.style.top = hs.y + '%';
     div.style.width = hs.w + '%';
@@ -196,7 +169,6 @@ function renderHotspots() {
   });
 }
 
-// Открытие товара
 let currentProduct = null;
 function openProduct(hs) {
   currentProduct = hs;
@@ -213,38 +185,29 @@ document.getElementById('btn-back').onclick = () => {
   currentProduct = null;
 };
 
-// Заказ в Telegram
 document.getElementById('btn-order').onclick = async () => {
   const phone = document.getElementById('customer-phone').value.trim();
   if (!phone) { alert('Пожалуйста, введите ваш номер телефона!'); return; }
   
   const btn = document.getElementById('btn-order');
-  btn.textContent = 'Отправка...';
-  btn.disabled = true;
+  btn.textContent = 'Отправка...'; btn.disabled = true;
 
-  const text = `🛒 *НОВЫЙ ЗАКАЗ*\n\n📦 *Товар:* ${currentProduct.title}\n💰 *Цена:* ${currentProduct.price} ₽\n📞 *Телефон клиента:* ${phone}\n📱 *Телефон продавца (из карточки):* ${currentProduct.phone || 'Не указан'}`;
+  const text = `🛒 *НОВЫЙ ЗАКАЗ*\n\n📦 *Товар:* ${currentProduct.title}\n💰 *Цена:* ${currentProduct.price} ₽\n📞 *Телефон клиента:* ${phone}\n📱 *Телефон продавца:* ${currentProduct.phone || 'Не указан'}`;
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: TG_CHAT_ID, text: text, parse_mode: 'Markdown' })
     });
     if (res.ok) {
       alert('✅ Заказ успешно отправлен! Мы свяжемся с вами.');
       document.getElementById('product-view').classList.remove('active');
-    } else {
-      alert('❌ Ошибка отправки. Попробуйте позже.');
-    }
-  } catch (err) {
-    alert('❌ Ошибка сети.');
-  }
-  btn.textContent = '🛒 ЗАКАЗАТЬ';
-  btn.disabled = false;
+    } else { alert('❌ Ошибка отправки.'); }
+  } catch (err) { alert('❌ Ошибка сети.'); }
+  btn.textContent = '🛒 ЗАКАЗАТЬ'; btn.disabled = false;
 };
 
-// --- Управление (Зум, Драг, Клавиатура) ---
-// (Упрощенная версия из прошлого ответа, адаптированная под ограничения)
+// Управление
 document.getElementById('zoomIn').onclick = () => { scale = Math.min(MAX_SCALE, scale + 0.2); updateTransform(); };
 document.getElementById('zoomOut').onclick = () => { scale = Math.max(MIN_SCALE, scale - 0.2); updateTransform(); };
 document.getElementById('reset').onclick = () => { scale = 1; posX = (viewer.clientWidth - img.naturalWidth)/2; posY = (viewer.clientHeight - img.naturalHeight)/2; updateTransform(); };
