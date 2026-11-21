@@ -11,7 +11,7 @@
   #viewer { position: relative; width: 100vw; height: 100vh; overflow: hidden; cursor: grab; }
   #viewer.dragging { cursor: grabbing; }
   
-  /* Контейнер, который масштабируется. Картинка и зоны внутри него движутся синхронно! */
+  /* Контейнер, который масштабируется. Его размер равен размеру картинки */
   #booklet-wrapper {
     position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform;
   }
@@ -20,14 +20,13 @@
   /* НЕВИДИМЫЕ ГОРЯЧИЕ ТОЧКИ */
   .hotspot {
     position: absolute;
-    border: 2px solid transparent; /* Прозрачная граница по умолчанию */
-    background: transparent;       /* Прозрачный фон по умолчанию */
+    border: 2px solid transparent;
+    background: transparent;
     cursor: pointer;
     transition: all 0.25s ease;
     border-radius: 6px;
     z-index: 10;
   }
-  /* При наведении мышкой или тапе на мобильном */
   .hotspot:hover, .hotspot:active {
     border-color: rgba(255, 215, 0, 0.8);
     background: rgba(255, 215, 0, 0.15);
@@ -141,38 +140,95 @@ let hotspots = [];
 
 try { hotspots = JSON.parse(document.getElementById('hotspots-data').textContent); } catch(e) { hotspots = []; }
 
+// УМНАЯ СИСТЕМА ОГРАНИЧЕНИЙ И ЦЕНТРИРОВАНИЯ
 function updateTransform() {
-  // ОГРАНИЧЕНИЯ ПО КРАЯМ
   const scaledW = img.naturalWidth * scale;
   const scaledH = img.naturalHeight * scale;
   const vW = viewer.clientWidth, vH = viewer.clientHeight;
 
-  const minX = Math.min(0, vW - scaledW);
-  const maxX = 0;
-  const minY = Math.min(0, vH - scaledH);
-  const maxY = 0;
+  let minX, maxX, minY, maxY;
 
+  // Если картинка шире экрана, разрешаем двигать влево-вправо в пределах краев
+  if (scaledW > vW) {
+    minX = vW - scaledW;
+    maxX = 0;
+  } else {
+    // Если картинка уже экрана, жестко центрируем по горизонтали
+    minX = maxX = (vW - scaledW) / 2;
+  }
+
+  // Если картинка выше экрана, разрешаем двигать вверх-вниз в пределах краев
+  if (scaledH > vH) {
+    minY = vH - scaledH;
+    maxY = 0;
+  } else {
+    // Если картинка ниже экрана, жестко центрируем по вертикали
+    minY = maxY = (vH - scaledH) / 2;
+  }
+
+  // Применяем ограничения
   posX = Math.min(maxX, Math.max(minX, posX));
   posY = Math.min(maxY, Math.max(minY, posY));
 
-  // Масштабируем ВЕСЬ контейнер (и картинку, и зоны внутри него)
   wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
   zoomInfo.textContent = Math.round(scale * 100) + '%';
 }
 
-img.onload = () => {
-  posX = (viewer.clientWidth - img.naturalWidth) / 2;
-  posY = (viewer.clientHeight - img.naturalHeight) / 2;
+// Инициализация при загрузке картинки
+function initViewer() {
+  const vW = viewer.clientWidth;
+  const vH = viewer.clientHeight;
+  const nW = img.naturalWidth;
+  const nH = img.naturalHeight;
+  
+  if (!nW || !nH) return; 
+  
+  // Если картинка больше экрана, автоматически уменьшаем её, чтобы она влезла с отступом 40px
+  const padding = 40;
+  if (nW > vW - padding || nH > vH - padding) {
+    const scaleW = (vW - padding) / nW;
+    const scaleH = (vH - padding) / nH;
+    scale = Math.min(scaleW, scaleH);
+  } else {
+    scale = 1; // Если картинка маленькая, оставляем 100% размер
+  }
+  
+  // Центрируем
+  posX = (vW - nW * scale) / 2;
+  posY = (vH - nH * scale) / 2;
+  
   renderHotspots();
   updateTransform();
-};
+}
+
+// Запуск (учитываем кэш браузера)
+if (img.complete) {
+  initViewer();
+} else {
+  img.onload = initViewer;
+}
+
+// Пересчет при повороте экрана или изменении размера окна
+window.addEventListener('resize', () => {
+  if (img.naturalWidth) {
+    const vW = viewer.clientWidth;
+    const vH = viewer.clientHeight;
+    const scaledW = img.naturalWidth * scale;
+    const scaledH = img.naturalHeight * scale;
+    
+    // Если после ресайза картинка стала меньше экрана, возвращаем её в центр
+    if (scaledW <= vW) posX = (vW - scaledW) / 2;
+    if (scaledH <= vH) posY = (vH - scaledH) / 2;
+    
+    updateTransform();
+  }
+});
 
 function renderHotspots() {
   hotspotsContainer.innerHTML = '';
   hotspots.forEach(hs => {
     const div = document.createElement('div');
     div.className = 'hotspot';
-    // Координаты в процентах! Браузер сам масштабирует их при зуме.
     div.style.left = hs.x + '%';
     div.style.top = hs.y + '%';
     div.style.width = hs.w + '%';
@@ -220,16 +276,21 @@ document.getElementById('btn-order').onclick = async () => {
   btn.textContent = '🛒 ЗАКАЗАТЬ'; btn.disabled = false;
 };
 
-// Управление
+// Управление зумом
 document.getElementById('zoomIn').onclick = () => { scale = Math.min(MAX_SCALE, scale + 0.2); updateTransform(); };
 document.getElementById('zoomOut').onclick = () => { scale = Math.max(MIN_SCALE, scale - 0.2); updateTransform(); };
-document.getElementById('reset').onclick = () => { scale = 1; posX = (viewer.clientWidth - img.naturalWidth)/2; posY = (viewer.clientHeight - img.naturalHeight)/2; updateTransform(); };
+document.getElementById('reset').onclick = () => { 
+  // Сброс к умному начальному состоянию
+  initViewer(); 
+};
 
+// Перетаскивание мышью
 let isDragging = false, startX, startY;
 viewer.addEventListener('mousedown', e => { isDragging = true; viewer.classList.add('dragging'); startX = e.clientX - posX; startY = e.clientY - posY; });
 window.addEventListener('mousemove', e => { if (!isDragging) return; posX = e.clientX - startX; posY = e.clientY - startY; updateTransform(); });
 window.addEventListener('mouseup', () => { isDragging = false; viewer.classList.remove('dragging'); });
 
+// Перетаскивание пальцем (тач)
 viewer.addEventListener('touchstart', e => { if(e.touches.length===1){ isDragging=true; startX=e.touches[0].clientX-posX; startY=e.touches[0].clientY-posY; }}, {passive:false});
 viewer.addEventListener('touchmove', e => { if(!isDragging||e.touches.length!==1) return; e.preventDefault(); posX=e.touches[0].clientX-startX; posY=e.touches[0].clientY-startY; updateTransform(); }, {passive:false});
 viewer.addEventListener('touchend', () => { isDragging = false; });
